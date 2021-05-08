@@ -1,12 +1,13 @@
 import requests
-import configparser
+from tools import MyUtiles
+import random
 from lxml import etree
 import ConnectionToMysql
 #配置连接数据库信息
 def main():
     conn = ConnectionToMysql.connection()
     cursor = conn.cursor()
-    url = "http://datachart.500.com/ssq/history/newinc/history.php?start=18094&end=18094" #双色球开奖结果查询页面，start和end对应的是期数
+    url = "http://datachart.500.com/ssq/history/newinc/history.php?start=3001&end=18093" #双色球开奖结果查询页面，start和end对应的是期数
     response = requests.get(url)
     response = response.text
     selector = etree.HTML(response)
@@ -22,7 +23,7 @@ def main():
       f = i.xpath('td/text()')[6]#红球6
       g = i.xpath('td/text()')[7]#篮球
       print(datetime,a,b,c,d,e,f,g)
-      sql = "insert into two_color_ball (stage,red_ball1,red_ball2,red_ball3,red_ball4,red_ball5,red_ball6,blue_ball) values("+datetime+","+a+","+b+","+c+","+d+","+e+","+f+","+g+");"
+      sql = "insert into two_color_ball (stage,red_ball1,red_ball2,red_ball3,red_ball4,red_ball5,red_ball6,blue_ball,forecast_or_not) values("+datetime+","+a+","+b+","+c+","+d+","+e+","+f+","+g+",0);"
       print("sql:"+sql)
       try:
        cursor.execute(sql)
@@ -34,55 +35,30 @@ def main():
     print("总共："+str(count))
     cursor.close()
     conn.close()
-def test():
-    config=configparser.ConfigParser()
-    print("-Empty config %s"%config.sections())
-    print("-Load config file")
-    config.read("./default.cfg")
-    print("----config----")
-    print(config)
-    print("----end config----")
-    print("> config sections : %s"%config.sections())
-    print('mysql.connection' in config)
-    for section in config:
-        print("[{s}]".format(s=section))
-        for key in config[section]:
-            print("{k} = {v}".format(k=key,v=config[section][key]))
 def probability():
-    conn=ConnectionToMysql.connection()
-    cursor=conn.cursor()
-    sql="SELECT * FROM two_color_ball ORDER BY stage DESC LIMIT 100"
-
-    try:
-        cursor.execute(sql)
-        conn.commit()
-        itemList = cursor.fetchall()
-        print("red ball probability:")
-        red=listToProbaility(itemList,37)
-        print(red)
-        print("sorted red:")
-        sortedRed=sorted(red.items(), key=lambda kv: (kv[1], kv[0]),reverse=True)
-        print(sortedRed)
-        item=sorted(sortedRed[0:6])
-        prob=[]
-        for i in item:
-            prob.append(i[0])
-        print(tuple(prob))
-        print("-"*30)
-        print("blue ball probability:")
-        blue=listToProbaility(itemList,17)
-        print ("sorted blue:")
-        print(sorted(blue.items(), key=lambda kv: (kv[1], kv[0]), reverse=True))
-    except:
-        pass
-    finally:
-        cursor.close()
-        conn.close()
+    sql="SELECT * FROM two_color_ball ORDER BY stage DESC LIMIT 1000"
+    fetchone,itemList = ConnectionToMysql.execute(sql,None)
+    red=listToProbaility(itemList,34)
+    sortedRed=sorted(red.items(), key=lambda kv: (kv[1], kv[0]),reverse=True)
+    item=sorted(sortedRed[0:6])
+    prob=[]
+    for i in item:
+        prob.append(i[0])
+    blue=listToProbaility(itemList,17)
+    sortedBlue=sorted(blue.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
+    prob.insert(0,MyUtiles.createStage())
+    prob.append(sortedBlue[random.randint(0,8)][0])
+    prob.append(1)
+    sql="insert into two_color_ball (stage,red_ball1,red_ball2,red_ball3,red_ball4,red_ball5,red_ball6,blue_ball,forecast_or_not) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+    value=tuple(prob)
+    print(value)
+    ConnectionToMysql.execute(sql,value)
+    print(prob)
 def listToProbaility(*args):
     mapping=retMap(1,args[1])
     count=0
     for item in args[0]:
-        if args[1]==37:
+        if args[1]==34:
             for i in range(1,7):
                 mapping[item[i]]=mapping[item[i]]+1
         if args[1]==17:
